@@ -38,6 +38,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true;
 
+    case 'SEARCH_OPENAI':
+      searchWithOpenAI(message.query, message.apiKey)
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true;
+
     case 'GET_HISTORY':
       chrome.storage.local
         .get({ searchHistory: [] })
@@ -159,6 +165,110 @@ async function searchDuckDuckGo(query) {
   }
 
   return res.json();
+}
+
+/**
+ * Fetches an LLM answer for the given query using the OpenAI Responses API.
+ *
+ * @param {string} query
+ * @param {string} apiKey
+ */
+async function searchWithOpenAI(query, apiKey) {
+  const cleanQuery = String(query || '').trim();
+  const cleanKey = String(apiKey || '').trim();
+
+  if (!cleanQuery) {
+    throw new Error('Query is required');
+  }
+
+  if (!cleanKey) {
+    throw new Error('OpenAI API key is required');
+  }
+
+  const res = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${cleanKey}`,
+    },
+    body: JSON.stringify({
+      model: 'gpt-4.1-mini',
+      temperature: 0.2,
+      max_output_tokens: 500,
+      input: [
+        {
+          role: 'system',
+          content:
+            'You summarize web-search intent. Return concise markdown with: ' +
+            '1) quick answer, 2) key points, 3) suggested search terms, ' +
+            '4) 3 reputable sources to check.',
+        },
+        {
+          role: 'user',
+          content: `User query: ${cleanQuery}`,
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const details = await safeReadText(res);
+    throw new Error(`OpenAI API error: ${res.status} ${details}`.trim());
+  }
+
+  const data = await res.json();
+  const outputText = extractOpenAIText(data);
+
+  if (!outputText) {
+    throw new Error('OpenAI returned an empty response');
+  }
+
+  return { outputText };
+}
+
+/**
+ * Attempts to extract the final text from different Responses API shapes.
+ *
+ * @param {any} data
+ */
+function extractOpenAIText(data) {
+  if (typeof data?.output_text === 'string' && data.output_text.trim()) {
+    return data.output_text.trim();
+  }
+
+  const chunks = [];
+  const outputs = Array.isArray(data?.output) ? data.output : [];
+
+  for (const item of outputs) {
+    const content = Array.isArray(item?.content) ? item.content : [];
+    for (const c of content) {
+      const textValue =
+        typeof c?.text === 'string'
+          ? c.text
+          : typeof c?.value === 'string'
+            ? c.value
+            : '';
+      if (textValue.trim()) {
+        chunks.push(textValue.trim());
+      }
+    }
+  }
+
+  return chunks.join('\n\n').trim();
+}
+
+/**
+ * Reads response body safely for better error messages.
+ *
+ * @param {Response} res
+ */
+async function safeReadText(res) {
+  try {
+    const text = await res.text();
+    return text.slice(0, 240);
+  } catch {
+    return '';
+  }
 }
 
 // ─── Offscreen Document Lifecycle ─────────────────────────────────────────────

@@ -50,6 +50,41 @@
         </div>
       </div>
 
+      <!-- ── Search Provider Settings ───────────────────────────────────── -->
+      <section class="panel-section" id="settings-section" aria-label="Search settings">
+        <div class="section-header">
+          <span class="section-title">Search Mode</span>
+        </div>
+        <div class="settings-card">
+          <label class="settings-label" for="provider-select">Provider</label>
+          <select id="provider-select" class="settings-select" aria-label="Search provider">
+            <option value="ddg">DuckDuckGo</option>
+            <option value="openai">LLM (OpenAI)</option>
+          </select>
+
+          <div id="openai-settings" class="hidden">
+            <label class="settings-label" for="openai-key-input">OpenAI API Key</label>
+            <div class="settings-inline">
+              <input
+                id="openai-key-input"
+                class="settings-input"
+                type="password"
+                placeholder="sk-..."
+                autocomplete="off"
+                spellcheck="false"
+                aria-label="OpenAI API key"
+              />
+              <button id="save-openai-key-btn" class="btn btn-secondary settings-save-btn" type="button">
+                Save
+              </button>
+            </div>
+            <p id="openai-key-hint" class="settings-hint">
+              Enter your OpenAI API key to enable LLM search.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <!-- ── Current Query Card ─────────────────────────────────────────── -->
       <section class="panel-section hidden" id="current-section" aria-label="Current clipboard query">
         <div class="section-header">

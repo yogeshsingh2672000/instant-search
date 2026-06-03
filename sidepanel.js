@@ -25,6 +25,9 @@
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const DDG_TIMEOUT_MS = 10000;
+const OPENAI_TIMEOUT_MS = 20000;
+const SEARCH_PROVIDER_DDG = 'ddg';
+const SEARCH_PROVIDER_OPENAI = 'openai';
 
 // ─── DOM References ───────────────────────────────────────────────────────────
 
@@ -43,10 +46,17 @@ const loadingState     = $('loading-state');
 const resultsContainer = $('results-container');
 const historyList      = $('history-list');
 const clearBtn         = $('clear-btn');
+const providerSelect   = $('provider-select');
+const openAISettings   = $('openai-settings');
+const openAIKeyInput   = $('openai-key-input');
+const saveOpenAIKeyBtn = $('save-openai-key-btn');
+const openAIKeyHint    = $('openai-key-hint');
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
 let activeItemId = null; // id of the currently displayed item
+let searchProvider = SEARCH_PROVIDER_DDG;
+let openAIApiKey = '';
 
 // ─── Initialisation ───────────────────────────────────────────────────────────
 
@@ -57,8 +67,26 @@ async function init() {
   chrome.runtime.sendMessage({ type: 'DISMISS_BADGE' }).catch(() => {});
 
   // Restore state from storage
-  const { currentItem, searchHistory = [] } =
-    await chrome.storage.local.get(['currentItem', 'searchHistory']);
+  const {
+    currentItem,
+    searchHistory = [],
+    searchProvider: savedProvider = SEARCH_PROVIDER_DDG,
+    openAIApiKey: savedOpenAIKey = '',
+  } = await chrome.storage.local.get([
+    'currentItem',
+    'searchHistory',
+    'searchProvider',
+    'openAIApiKey',
+  ]);
+
+  searchProvider = savedProvider === SEARCH_PROVIDER_OPENAI
+    ? SEARCH_PROVIDER_OPENAI
+    : SEARCH_PROVIDER_DDG;
+  openAIApiKey = String(savedOpenAIKey || '').trim();
+
+  providerSelect.value = searchProvider;
+  openAIKeyInput.value = openAIApiKey;
+  refreshProviderUI();
 
   renderHistory(searchHistory);
 
@@ -66,6 +94,21 @@ async function init() {
     displayItem(currentItem, /* autoSearch */ true);
   }
 }
+
+providerSelect.addEventListener('change', async () => {
+  searchProvider = providerSelect.value === SEARCH_PROVIDER_OPENAI
+    ? SEARCH_PROVIDER_OPENAI
+    : SEARCH_PROVIDER_DDG;
+  await chrome.storage.local.set({ searchProvider });
+  refreshProviderUI();
+});
+
+saveOpenAIKeyBtn.addEventListener('click', async () => {
+  const key = openAIKeyInput.value.trim();
+  openAIApiKey = key;
+  await chrome.storage.local.set({ openAIApiKey: key });
+  refreshProviderUI();
+});
 
 // ─── Incoming Message Listener ────────────────────────────────────────────────
 
@@ -153,9 +196,12 @@ async function performSearch(query) {
   const bingUrl= `https://www.bing.com/search?q=${enc(query)}`;
 
   engineLinks.innerHTML = [
-    engineLink(gUrl,    'G',   'Google'),
-    engineLink(ddgUrl,  'DDG', 'DuckDuckGo'),
-    engineLink(bingUrl, 'B',   'Bing'),
+    engineLink(gUrl, 'G', 'Google'),
+    engineLink(ddgUrl, 'DDG', 'DuckDuckGo'),
+    engineLink(bingUrl, 'B', 'Bing'),
+    searchProvider === SEARCH_PROVIDER_OPENAI
+      ? '<span class="engine-link" aria-label="Current provider">LLM</span>'
+      : '',
   ].join('');
 
   // Show results section with spinner
@@ -165,7 +211,23 @@ async function performSearch(query) {
 
   setStatus('loading', 'Searching…');
 
+  if (searchProvider === SEARCH_PROVIDER_OPENAI && !openAIApiKey) {
+    loadingState.classList.add('hidden');
+    setStatus('error', 'OpenAI key needed');
+    renderOpenAIKeyMissing(query);
+    refreshProviderUI(true);
+    return;
+  }
+
   try {
+    if (searchProvider === SEARCH_PROVIDER_OPENAI) {
+      const json = await searchOpenAIViaBackground(query, openAIApiKey, OPENAI_TIMEOUT_MS);
+      loadingState.classList.add('hidden');
+      setStatus('active', 'Monitoring');
+      renderOpenAIResult(json, query);
+      return;
+    }
+
     const json = await searchViaBackground(query, DDG_TIMEOUT_MS);
     loadingState.classList.add('hidden');
     setStatus('active', 'Monitoring');
@@ -292,6 +354,48 @@ function renderErrorState(query) {
         <a href="${gUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Search Google</a>
       </div>
     </div>`;
+}
+
+function renderOpenAIResult(result, query) {
+  const text = String(result?.outputText || '').trim();
+  if (!text) {
+    renderErrorState(query);
+    return;
+  }
+
+  const gUrl = `https://www.google.com/search?q=${enc(query)}`;
+  const ddgUrl = `https://duckduckgo.com/?q=${enc(query)}`;
+
+  resultsContainer.innerHTML = `
+    <div class="result-card answer-card">
+      <div class="result-card-label">OpenAI Summary</div>
+      <div class="llm-result">${escapeHtml(text)}</div>
+      <div class="action-buttons" style="margin-top:10px;">
+        <a href="${gUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">Search Google</a>
+        <a href="${ddgUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">DuckDuckGo</a>
+      </div>
+    </div>`;
+}
+
+function renderOpenAIKeyMissing(query) {
+  const gUrl = `https://www.google.com/search?q=${enc(query)}`;
+  resultsContainer.innerHTML = `
+    <div class="error-state">
+      <p>OpenAI search is selected. Please add your OpenAI API key in Search Mode settings.</p>
+      <div class="action-buttons">
+        <button id="focus-openai-settings-btn" class="btn btn-primary" type="button">Add OpenAI Key</button>
+        <a href="${gUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary">Search Google</a>
+      </div>
+    </div>`;
+
+  const focusBtn = $('focus-openai-settings-btn');
+  focusBtn?.addEventListener('click', () => {
+    providerSelect.value = SEARCH_PROVIDER_OPENAI;
+    searchProvider = SEARCH_PROVIDER_OPENAI;
+    chrome.storage.local.set({ searchProvider }).catch(() => {});
+    refreshProviderUI(true);
+    openAIKeyInput.focus();
+  });
 }
 
 function showImageFallback() {
@@ -428,6 +532,32 @@ function triggerManualSearch(query) {
   performSearch(query);
 }
 
+/**
+ * Updates settings visibility and key guidance text.
+ *
+ * @param {boolean} emphasizeMissingKey
+ */
+function refreshProviderUI(emphasizeMissingKey = false) {
+  const isOpenAI = searchProvider === SEARCH_PROVIDER_OPENAI;
+  openAISettings.classList.toggle('hidden', !isOpenAI);
+
+  if (!isOpenAI) {
+    openAIKeyHint.classList.remove('warn');
+    openAIKeyHint.textContent = 'Enter your OpenAI API key to enable LLM search.';
+    return;
+  }
+
+  if (!openAIApiKey) {
+    openAIKeyHint.classList.toggle('warn', true);
+    openAIKeyHint.textContent = emphasizeMissingKey
+      ? 'OpenAI key required: please paste your key and click Save.'
+      : 'Please provide your OpenAI API key, then click Save.';
+  } else {
+    openAIKeyHint.classList.remove('warn');
+    openAIKeyHint.textContent = 'OpenAI key saved. Searches will use OpenAI.';
+  }
+}
+
 function setStatus(type, text) {
   statusDot.className    = `status-dot ${type}`;
   statusLabel.textContent = text;
@@ -508,6 +638,29 @@ function searchViaBackground(query, timeoutMs) {
     }),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error('DDG search timed out')), timeoutMs)
+    ),
+  ]);
+}
+
+/**
+ * Requests OpenAI-powered search summary from the background worker.
+ *
+ * @param {string} query
+ * @param {string} apiKey
+ * @param {number} timeoutMs
+ */
+function searchOpenAIViaBackground(query, apiKey, timeoutMs) {
+  return Promise.race([
+    chrome.runtime
+      .sendMessage({ type: 'SEARCH_OPENAI', query, apiKey })
+      .then((res) => {
+        if (!res?.success) {
+          throw new Error(res?.error || 'OpenAI search failed');
+        }
+        return res.data;
+      }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('OpenAI search timed out')), timeoutMs)
     ),
   ]);
 }
