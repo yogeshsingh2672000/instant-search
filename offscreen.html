@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Instant Search — Offscreen Clipboard Monitor</title>
+  </head>
+  <body>
+    <!--
+      This document is invisible to the user. It exists solely to provide a DOM
+      context in which navigator.clipboard.readText() can be called as a backup
+      clipboard monitor (the primary path is the content script copy event).
+    -->
+    <script src="offscreen.js"></script>
+  </body>
+</html>

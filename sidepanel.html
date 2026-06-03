@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Instant Search</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <div id="app">
+
+      <!-- ── Header ─────────────────────────────────────────────────────── -->
+      <header class="header">
+        <div class="header-inner">
+          <div class="logo">
+            <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            <span class="logo-text">Instant Search</span>
+          </div>
+          <div class="status-pill" id="status-pill" title="Monitoring clipboard">
+            <span class="status-dot" id="status-dot"></span>
+            <span class="status-label" id="status-label">Monitoring</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- ── Manual Search Bar ──────────────────────────────────────────── -->
+      <div class="search-bar-wrapper">
+        <div class="search-bar">
+          <svg class="search-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            type="search"
+            id="manual-input"
+            class="search-bar-input"
+            placeholder="Search manually…"
+            autocomplete="off"
+            spellcheck="false"
+            aria-label="Manual search input"
+          />
+          <button class="search-bar-btn" id="search-bar-btn" aria-label="Search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── Current Query Card ─────────────────────────────────────────── -->
+      <section class="panel-section hidden" id="current-section" aria-label="Current clipboard query">
+        <div class="section-header">
+          <span class="section-title">Copied</span>
+          <span class="badge" id="content-type-badge">text</span>
+        </div>
+        <div class="query-card" id="query-display" aria-live="polite"></div>
+      </section>
+
+      <!-- ── Search Results ─────────────────────────────────────────────── -->
+      <section class="panel-section hidden" id="results-section" aria-label="Search results">
+        <div class="section-header">
+          <span class="section-title">Results</span>
+          <div class="engine-links" id="engine-links" aria-label="Search engine shortcuts"></div>
+        </div>
+
+        <!-- Loading state -->
+        <div class="loading-state hidden" id="loading-state" aria-live="polite" aria-label="Loading results">
+          <div class="spinner" aria-hidden="true"></div>
+          <span>Searching…</span>
+        </div>
+
+        <!-- Results will be injected here -->
+        <div id="results-container" aria-live="polite"></div>
+      </section>
+
+      <!-- ── History ────────────────────────────────────────────────────── -->
+      <section class="panel-section" id="history-section" aria-label="Search history">
+        <div class="section-header">
+          <span class="section-title">Recent</span>
+          <button class="ghost-btn" id="clear-btn" aria-label="Clear history">Clear all</button>
+        </div>
+        <div id="history-list" aria-live="polite">
+          <!-- Populated by sidepanel.js -->
+          <div class="empty-state" id="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="11" cy="11" r="8"/>
+              <path d="m21 21-4.35-4.35"/>
+            </svg>
+            <p class="empty-title">No searches yet</p>
+            <p class="empty-sub">Copy any text to trigger an instant search</p>
+          </div>
+        </div>
+      </section>
+
+    </div><!-- /#app -->
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

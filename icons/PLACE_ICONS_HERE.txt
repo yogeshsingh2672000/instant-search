@@ -1,0 +1,2 @@
+Place icon16.png, icon32.png, icon48.png, and icon128.png here.
+Open tools/generate-icons.html in a browser to generate them automatically.

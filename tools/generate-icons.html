@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Instant Search — Icon Generator</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 24px; background: #f5f5f5; }
+    h1   { font-size: 18px; margin-bottom: 16px; }
+    p    { margin-bottom: 12px; color: #555; font-size: 14px; }
+    .previews { display: flex; gap: 16px; align-items: flex-end; margin: 16px 0; }
+    .preview  { text-align: center; font-size: 11px; color: #888; }
+    button    { padding: 10px 20px; background: #1a73e8; color: #fff; border: none;
+                border-radius: 6px; font-size: 14px; cursor: pointer; }
+    button:hover { background: #1557b0; }
+  </style>
+</head>
+<body>
+  <h1>Instant Search — Icon Generator</h1>
+  <p>
+    Click <strong>Generate &amp; Download Icons</strong> to create the four required PNG
+    icon files. Save each download into the <code>icons/</code> folder inside the
+    extension directory.
+  </p>
+  <div class="previews" id="previews"></div>
+  <button id="gen-btn">Generate &amp; Download Icons</button>
+
+  <script>
+    const SIZES = [16, 32, 48, 128];
+
+    /**
+     * Draws a single icon onto a canvas of the given size.
+     * Design: rounded blue square with a white magnifying-glass glyph.
+     */
+    function drawIcon(size) {
+      const canvas = document.createElement('canvas');
+      canvas.width  = size;
+      canvas.height = size;
+      const ctx = canvas.getContext('2d');
+
+      const r  = size * 0.18;   // corner radius
+      const lw = Math.max(1, size * 0.09); // stroke width
+
+      // ── Background ────────────────────────────────────────────────────────
+      ctx.beginPath();
+      ctx.roundRect(0, 0, size, size, r);
+      const grad = ctx.createLinearGradient(0, 0, size, size);
+      grad.addColorStop(0, '#1a73e8');
+      grad.addColorStop(1, '#0d5bba');
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // ── Magnifying glass circle ───────────────────────────────────────────
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth   = lw;
+      ctx.lineCap     = 'round';
+      const cx = size * 0.42;
+      const cy = size * 0.42;
+      const cr = size * 0.22;
+      ctx.beginPath();
+      ctx.arc(cx, cy, cr, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // ── Handle ────────────────────────────────────────────────────────────
+      const angle = Math.PI / 4; // 45°
+      const hx1   = cx + cr * Math.cos(angle);
+      const hy1   = cy + cr * Math.sin(angle);
+      const hx2   = cx + (cr + size * 0.22) * Math.cos(angle);
+      const hy2   = cy + (cr + size * 0.22) * Math.sin(angle);
+      ctx.beginPath();
+      ctx.moveTo(hx1, hy1);
+      ctx.lineTo(hx2, hy2);
+      ctx.stroke();
+
+      return canvas;
+    }
+
+    document.getElementById('gen-btn').addEventListener('click', () => {
+      const previewsEl = document.getElementById('previews');
+      previewsEl.innerHTML = '';
+
+      SIZES.forEach((size) => {
+        const canvas = drawIcon(size);
+
+        // Show preview
+        const wrap = document.createElement('div');
+        wrap.className = 'preview';
+        wrap.appendChild(canvas);
+        wrap.appendChild(document.createTextNode(`${size}×${size}`));
+        previewsEl.appendChild(wrap);
+
+        // Trigger download
+        canvas.toBlob((blob) => {
+          const url  = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href     = url;
+          link.download = `icon${size}.png`;
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        }, 'image/png');
+      });
+    });
+  </script>
+</body>
+</html>
