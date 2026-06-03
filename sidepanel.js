@@ -24,8 +24,7 @@
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const DDG_API = 'https://api.duckduckgo.com/';
-const DDG_TIMEOUT_MS = 8000;
+const DDG_TIMEOUT_MS = 10000;
 
 // ─── DOM References ───────────────────────────────────────────────────────────
 
@@ -167,15 +166,11 @@ async function performSearch(query) {
   setStatus('loading', 'Searching…');
 
   try {
-    const data = await fetchWithTimeout(
-      `${DDG_API}?q=${enc(query)}&format=json&no_redirect=1&no_html=1&skip_disambig=1`,
-      DDG_TIMEOUT_MS
-    );
-    const json = await data.json();
+    const json = await searchViaBackground(query, DDG_TIMEOUT_MS);
     loadingState.classList.add('hidden');
     setStatus('active', 'Monitoring');
     renderResults(json, query);
-  } catch (err) {
+  } catch {
     loadingState.classList.add('hidden');
     setStatus('active', 'Monitoring');
     renderErrorState(query);
@@ -497,16 +492,24 @@ function iconSvg(pathD) {
 }
 
 /**
- * Wraps fetch() with an AbortController timeout.
+ * Requests DDG results from background.js (service worker) for robust
+ * cross-origin fetching under extension host permissions.
  *
- * @param {string} url
+ * @param {string} query
  * @param {number} timeoutMs
  */
-function fetchWithTimeout(url, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  return fetch(url, { signal: controller.signal })
-    .finally(() => clearTimeout(timer));
+function searchViaBackground(query, timeoutMs) {
+  return Promise.race([
+    chrome.runtime.sendMessage({ type: 'SEARCH_DDG', query }).then((res) => {
+      if (!res?.success) {
+        throw new Error(res?.error || 'DDG search failed');
+      }
+      return res.data;
+    }),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('DDG search timed out')), timeoutMs)
+    ),
+  ]);
 }
 
 // ─── Boot ─────────────────────────────────────────────────────────────────────

@@ -26,11 +26,17 @@ chrome.sidePanel
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   switch (message.type) {
-    case 'CLIPBOARD_CHANGE':
-      handleClipboardChange(message)
+    case 'CLIPBOARD_APPROVED':
+      handleClipboardApproved(message, _sender)
         .then(() => sendResponse({ success: true }))
         .catch((err) => sendResponse({ success: false, error: err.message }));
       return true; // keep the message channel open for the async response
+
+    case 'SEARCH_DDG':
+      searchDuckDuckGo(message.query)
+        .then((data) => sendResponse({ success: true, data }))
+        .catch((err) => sendResponse({ success: false, error: err.message }));
+      return true;
 
     case 'GET_HISTORY':
       chrome.storage.local
@@ -99,6 +105,60 @@ async function handleClipboardChange(clipboardData) {
 
   // Forward to side panel — fails silently when the panel is not open
   chrome.runtime.sendMessage({ type: 'NEW_CLIPBOARD_ITEM', item: newItem }).catch(() => {});
+}
+
+/**
+ * Processes only user-approved clipboard items from the content-script popup.
+ *
+ * @param {object} message - clipboard payload from content.js
+ * @param {chrome.runtime.MessageSender} sender
+ */
+async function handleClipboardApproved(message, sender) {
+  await tryOpenSidePanel(sender?.tab?.id);
+  await handleClipboardChange(message);
+}
+
+/**
+ * Attempts to open the side panel for the active tab. This may fail on some
+ * Chrome versions or contexts; in those cases we silently continue.
+ *
+ * @param {number|undefined} tabId
+ */
+async function tryOpenSidePanel(tabId) {
+  if (!tabId || !chrome.sidePanel?.open) return;
+  try {
+    await chrome.sidePanel.open({ tabId });
+  } catch {
+    // Opening side panel is best-effort only.
+  }
+}
+
+/**
+ * Fetches DuckDuckGo Instant Answer JSON from the service worker.
+ * Using background fetch avoids panel-context CORS inconsistencies.
+ *
+ * @param {string} query
+ */
+async function searchDuckDuckGo(query) {
+  if (!query || !String(query).trim()) {
+    throw new Error('Query is required');
+  }
+
+  const url =
+    'https://api.duckduckgo.com/?q=' +
+    encodeURIComponent(String(query)) +
+    '&format=json&no_redirect=1&no_html=1&skip_disambig=1';
+
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  });
+
+  if (!res.ok) {
+    throw new Error(`DuckDuckGo API error: ${res.status}`);
+  }
+
+  return res.json();
 }
 
 // ─── Offscreen Document Lifecycle ─────────────────────────────────────────────
